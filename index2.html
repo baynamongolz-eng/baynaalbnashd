@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="mn">
+<h    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Нон-Стоп Неон Буудалцаан - Гар залууртай</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* Prevents touch scroll */
+        }
+        body {
+            background-color: #060814;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .glow-text {
+            text-shadow: 0 0 12px rgba(0, 240, 255, 0.8);
+        }
+        .glass-panel {
+            background: rgba(13, 17, 38, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            box-shadow: 0 0 35px rgba(0, 0, 0, 0.8);
+        }
+        /* Upgrade Card Styles */
+        .upgrade-card {
+            background: linear-gradient(145deg, rgba(20, 27, 58, 0.95), rgba(10, 14, 32, 0.95));
+            border: 2px solid rgba(0, 240, 255, 0.3);
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .upgrade-card:active {
+            transform: scale(0.96);
+            border-color: #00f0ff;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.6);
+        }
+        .joystick-base {
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(8px);
+        }
+        .joystick-stick {
+            background: radial-gradient(circle, rgba(0, 240, 255, 0.9) 0%, rgba(0, 150, 255, 0.6) 100%);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.8);
+        }
+        .aim-joystick-stick {
+            background: radial-gradient(circle, rgba(255, 0, 85, 0.9) 0%, rgba(200, 0, 50, 0.6) 100%);
+            box-shadow: 0 0 15px rgba(255, 0, 85, 0.8);
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen">
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD Interface -->
+    <div id="hud" class="absolute top-0 left-0 right-0 p-3 pointer-events-none flex justify-between items-start text-white z-10">
+        <!-- Player Stats -->
+        <div class="flex flex-col gap-1 w-1/3 max-w-[190px]">
+            <!-- Health Bar -->
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-heart text-red-500 text-xs"></i>
+                <div class="w-full bg-slate-900/80 h-3.5 rounded-full overflow-hidden border border-red-500/40 p-0.5">
+                    <div id="hpBar" class="bg-gradient-to-r from-red-600 to-rose-400 h-full w-full rounded-full transition-all duration-150"></div>
+                </div>
+            </div>
+            <!-- XP Bar -->
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-bolt text-cyan-400 text-xs"></i>
+                <div class="w-full bg-slate-900/80 h-3 rounded-full overflow-hidden border border-cyan-400/40 p-0.5">
+                    <div id="xpBar" class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full w-0 rounded-full transition-all duration-150"></div>
+                </div>
+            </div>
+            <div class="text-[11px] font-extrabold text-cyan-300 flex justify-between px-1 mt-0.5">
+                <span>ТҮВШИН: <span id="levelVal" class="text-white">1</span></span>
+                <span>ОНОО: <span id="scoreVal" class="text-white">0</span></span>
+            </div>
+        </div>
+
+        <!-- Wave Indicator -->
+        <div class="text-center">
+            <div class="text-[10px] text-gray-400 font-bold tracking-widest uppercase">ДАВТОЛТ</div>
+            <div id="waveVal" class="text-2xl font-black text-cyan-400 glow-text">1</div>
+        </div>
+
+        <!-- Weapons & Gems -->
+        <div class="flex flex-col items-end gap-1">
+            <div class="flex items-center gap-1.5 text-emerald-400 font-extrabold text-sm bg-slate-900/60 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                <i class="fa-solid fa-gem text-xs"></i>
+                <span id="gemVal">0</span>
+            </div>
+            <div id="weaponType" class="text-[10px] bg-slate-900/80 px-2 py-0.5 rounded-md text-gray-300 border border-slate-700">
+                Энгийн Буу
+            </div>
+        </div>
+    </div>
+
+    <!-- On-Screen Dual Joysticks for Mobile (Movement & Manual Aim Shooting) -->
+    <div id="mobileControls" class="absolute bottom-6 left-0 right-0 px-6 flex justify-between items-center pointer-events-none z-20">
+        <!-- Left Joystick (Move) -->
+        <div id="moveJoyBase" class="joystick-base w-32 h-32 rounded-full relative pointer-events-auto flex items-center justify-center">
+            <div id="moveJoyStick" class="joystick-stick w-14 h-14 rounded-full absolute transition-transform duration-75"></div>
+            <span class="text-[10px] font-bold text-gray-400/60 absolute bottom-2">ХӨДЛӨХ</span>
+        </div>
+
+        <!-- Right Joystick (Manual Aim & Fire) -->
+        <div id="aimJoyBase" class="joystick-base w-32 h-32 rounded-full relative pointer-events-auto flex items-center justify-center border-rose-500/40">
+            <div id="aimJoyStick" class="aim-joystick-stick w-14 h-14 rounded-full absolute transition-transform duration-75"></div>
+            <span class="text-[10px] font-bold text-rose-400/60 absolute bottom-2">ОНИЛОХ / БУУДАХ</span>
+        </div>
+    </div>
+
+    <!-- START SCREEN -->
+    <div id="startModal" class="absolute inset-0 glass-panel flex flex-col items-center justify-center p-6 text-center z-40">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-rose-500 flex items-center justify-center text-3xl text-white mb-4 shadow-lg shadow-cyan-500/40">
+            <i class="fa-solid fa-crosshair"></i>
+        </div>
+        <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-rose-500 mb-2">НЕОН БУУДАЛЦААН</h1>
+        <p class="text-gray-300 text-xs max-w-xs mb-6">Гараар оновчтой чиглүүлж буудан, тулааны карт сонгож чадвараа ахиулна уу!</p>
+        
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 text-left text-xs text-gray-300 w-full max-w-xs mb-6 space-y-2.5">
+            <div class="flex items-center gap-2.5"><i class="fa-solid fa-mobile-screen text-cyan-400 text-sm"></i><span><b>Утас:</b> Зүүн жойстикоор хөдөлнө. Баруун жойстикоор <b>гараар чиглүүлж буудна</b>.</span></div>
+            <div class="flex items-center gap-2.5"><i class="fa-solid fa-keyboard text-rose-400 text-sm"></i><span><b>Компьютер:</b> WASD хөдөлнө. <b>Маус зааж дарснаар</b> гараар оновчтой буудна.</span></div>
+        </div>
+
+        <button id="btnStartGame" class="w-full max-w-xs py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl text-white font-black text-lg shadow-lg shadow-cyan-500/40 active:scale-95 transition-all">
+            ТОГЛОЖ ЭХЛЭХ
+        </button>
+    </div>
+
+    <!-- CARD SELECTION UPGRADE MODAL -->
+    <div id="upgradeModal" class="hidden absolute inset-0 glass-panel flex flex-col items-center justify-center p-5 text-center z-50">
+        <div class="text-yellow-400 text-xs font-black tracking-widest uppercase mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-star"></i> ТҮВШИН АХИЛАА <i class="fa-solid fa-star"></i>
+        </div>
+        <h2 class="text-2xl font-black text-white mb-5">ХӨГЖҮҮЛЭЛТИЙН КАРТ СӨНГОХ</h2>
+        
+        <div id="upgradeCardsContainer" class="w-full max-w-md flex flex-col sm:flex-row gap-3">
+            <!-- Dynamically generated 3 selection cards -->
+        </div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="gameOverModal" class="hidden absolute inset-0 glass-panel flex flex-col items-center justify-center p-6 text-center z-50">
+        <div class="w-16 h-16 rounded-full bg-rose-500/20 text-rose-500 border border-rose-500 flex items-center justify-center text-3xl mb-3">
+            <i class="fa-solid fa-skull"></i>
+        </div>
+        <h2 class="text-3xl font-black text-rose-500 mb-1">ТОГЛООМ ДУУСЛАА</h2>
+        <p class="text-gray-400 text-xs mb-4">Та баатарлагаар амиа алдлаа!</p>
+        
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700 w-full max-w-xs mb-6 flex justify-around text-center">
+            <div>
+                <div class="text-gray-400 text-xs">ОНОО</div>
+                <div id="finalScore" class="text-xl font-bold text-cyan-400">0</div>
+            </div>
+            <div class="border-r border-slate-700"></div>
+            <div>
+                <div class="text-gray-400 text-xs">ДАВТОЛТ</div>
+                <div id="finalWave" class="text-xl font-bold text-yellow-400">1</div>
+            </div>
+        </div>
+
+        <button id="btnRestart" class="w-full max-w-xs py-3.5 bg-gradient-to-r from-rose-500 to-red-600 rounded-xl text-white font-black text-lg shadow-lg shadow-rose-500/40 active:scale-95 transition-all">
+            ДАХИН ЭХЛЭХ
+        </button>
+    </div>
+
+    <script>
+        /* Web Audio Synthesizer */
+        class SoundFX {
+            constructor() { this.ctx = null; }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+            }
+            playShoot() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(550, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+            playExplosion() {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.2;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(600, this.ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.2);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+            playCardPick() {
+                if (!this.ctx) return;
+                const notes = [300, 450, 600];
+                notes.forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(f, this.ctx.currentTime + idx * 0.06);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime + idx * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.06 + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.06);
+                    osc.stop(this.ctx.currentTime + idx * 0.06 + 0.15);
+                });
+            }
+        }
+
+        const soundFX = new SoundFX();
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let viewportWidth = window.innerWidth;
+        let viewportHeight = window.innerHeight;
+
+        function resizeCanvas() {
+            viewportWidth = window.innerWidth;
+            viewportHeight = window.innerHeight;
+            canvas.width = viewportWidth;
+            canvas.height = viewportHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let isGameRunning = false;
+        let isPausedForUpgrade = false;
+        let score = 0;
+        let gems = 0;
+        let playerLevel = 1;
+        let playerXP = 0;
+        let xpToNextLevel = 60;
+        let currentWave = 1;
+        let enemySpawnTimer = 0;
+        let screenShake = 0;
+
+        // Camera scroll offsets for moving space arena effect
+        let cameraOffset = { x: 0, y: 0 };
+
+        const player = {
+            x: viewportWidth / 2,
+            y: viewportHeight / 2,
+            radius: 18,
+            color: '#00f0ff',
+            maxHp: 100,
+            hp: 100,
+            speed: 4.8,
+            fireRate: 180, // ms delay
+            lastShotTime: 0,
+            bulletSpeed: 11,
+            bulletDamage: 30,
+            bulletSpread: 1,
+            explosiveBullets: false,
+            lifesteal: 0,
+            hasShield: false,
+            aimAngle: 0, // Manual aiming angle in radians
+            isAiming: false
+        };
+
+        // Enhanced Upgrade Cards Database
+        const allUpgradeCards = [
+            { id: 'spread', title: 'Олон Сум Харваа', desc: '+1 Нэмэлт сум зэрэг харвана', icon: 'fa-burst', color: 'from-amber-500 to-yellow-600', apply: () => { player.bulletSpread += 1; } },
+            { id: 'fireRate', title: 'Буудах Хурд', desc: 'Буудах хурдыг +30% нэмэгдүүлнэ', icon: 'fa-gauge-high', color: 'from-cyan-500 to-blue-600', apply: () => { player.fireRate = Math.max(70, player.fireRate * 0.7); } },
+            { id: 'damage', title: 'Хүчтэй Хөнөөл', desc: 'Сумны хохирох хүчийг +40% нэмнэ', icon: 'fa-bolt', color: 'from-rose-500 to-red-600', apply: () => { player.bulletDamage *= 1.4; } },
+            { id: 'explosive', title: 'Тэсрэлттэй Сум', desc: 'Сум тусахад талбайн тэсрэлт үүснэ', icon: 'fa-bomb', color: 'from-orange-500 to-red-600', apply: () => { player.explosiveBullets = true; } },
+            { id: 'speed', title: 'Шуурхай Хөдөлгөөн', desc: 'Гүйх хурдыг +25% нэмнэ', icon: 'fa-person-running', color: 'from-emerald-500 to-teal-600', apply: () => { player.speed *= 1.25; } },
+            { id: 'lifesteal', title: 'Цус Сорох', desc: 'Дайсан устгахад цус нөхнө', icon: 'fa-vial', color: 'from-purple-500 to-indigo-600', apply: () => { player.lifesteal += 4; } },
+            { id: 'heal', title: 'Амь Нөхөх', desc: 'Эрүүл мэндийг бүрэн нөхнө (+30 max)', icon: 'fa-heart-pulse', color: 'from-pink-500 to-rose-600', apply: () => { player.maxHp += 30; player.hp = player.maxHp; } },
+            { id: 'shield', title: 'Бадамлагч Бамбай', desc: 'Эхний нэг цохилтыг хаах хамгаалалт', icon: 'fa-shield-halved', color: 'from-sky-500 to-cyan-600', apply: () => { player.hasShield = true; } }
+        ];
+
+        // Directional Joystick Handling
+        function setupVirtualJoystick(baseId, stickId, onMove) {
+            const base = document.getElementById(baseId);
+            const stick = document.getElementById(stickId);
+            let activeTouchId = null;
+            let center = { x: 0, y: 0 };
+
+            const start = (e) => {
+                if (activeTouchId !== null) return;
+                const touch = e.changedTouches ? e.changedTouches[0] : e;
+                activeTouchId = touch.identifier !== undefined ? touch.identifier : 'mouse';
+                const rect = base.getBoundingClientRect();
+                center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                move(e);
+            };
+
+            const move = (e) => {
+                if (activeTouchId === null) return;
+                let touch = null;
+                if (e.changedTouches) {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        if (e.changedTouches[i].identifier === activeTouchId) {
+                            touch = e.changedTouches[i];
+                            break;
+                        }
+                    }
+                } else {
+                    touch = e;
+                }
+                if (!touch) return;
+
+                const dx = touch.clientX - center.x;
+                const dy = touch.clientY - center.y;
+                const dist = Math.hypot(dx, dy);
+                const maxDist = 45;
+                const angle = Math.atan2(dy, dx);
+
+                const clampedDist = Math.min(dist, maxDist);
+                const stickX = Math.cos(angle) * clampedDist;
+                const stickY = Math.sin(angle) * clampedDist;
+
+                stick.style.transform = `translate(${stickX}px, ${stickY}px)`;
+                onMove(dist > 5, angle, clampedDist / maxDist);
+            };
+
+            const end = (e) => {
+                if (activeTouchId === null) return;
+                stick.style.transform = `translate(0px, 0px)`;
+                activeTouchId = null;
+                onMove(false, 0, 0);
+            };
+
+            base.addEventListener('touchstart', start, { passive: false });
+            window.addEventListener('touchmove', move, { passive: false });
+            window.addEventListener('touchend', end, { passive: false });
+            window.addEventListener('touchcancel', end, { passive: false });
+        }
+
+        // Left Joystick Controls Movement
+        let moveVec = { active: false, angle: 0, speedFactor: 0 };
+        setupVirtualJoystick('moveJoyBase', 'moveJoyStick', (active, angle, factor) => {
+            moveVec = { active, angle, speedFactor: factor };
+        });
+
+        // Right Joystick Controls MANUAL AIMING & SHOOTING
+        let aimJoyVec = { active: false, angle: 0 };
+        setupVirtualJoystick('aimJoyBase', 'aimJoyStick', (active, angle) => {
+            aimJoyVec = { active, angle };
+            if (active) {
+                player.aimAngle = angle;
+                player.isAiming = true;
+            } else {
+                player.isAiming = false;
+            }
+        });
+
+        // Keyboard Controls
+        const keys = { up: false, down: false, left: false, right: false };
+        window.addEventListener('keydown', (e) => {
+            soundFX.init();
+            if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') keys.up = true;
+            if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = true;
+            if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') keys.up = false;
+            if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = false;
+            if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = false;
+        });
+
+        // Mouse Manual Aim & Shooting
+        let isMouseDown = false;
+        window.addEventListener('pointerdown', (e) => {
+            if (!isGameRunning || isPausedForUpgrade) return;
+            // Ignore touch controls zone click
+            if (e.clientY > viewportHeight - 180 && (e.clientX < 180 || e.clientX > viewportWidth - 180)) return;
+            soundFX.init();
+            isMouseDown = true;
+            updateMouseAim(e);
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (isMouseDown) updateMouseAim(e);
+        });
+
+        window.addEventListener('pointerup', () => { isMouseDown = false; if (!aimJoyVec.active) player.isAiming = false; });
+
+        function updateMouseAim(e) {
+            const dx = e.clientX - player.x;
+            const dy = e.clientY - player.y;
+            player.aimAngle = Math.atan2(dy, dx);
+            player.isAiming = true;
+        }
+
+        let bullets = [];
+        let enemies = [];
+        let particles = [];
+        let gemsList = [];
+        let bgGridStars = [];
+
+        for (let i = 0; i < 150; i++) {
+            bgGridStars.push({
+                x: Math.random() * 3000 - 1500,
+                y: Math.random() * 3000 - 1500,
+                size: Math.random() * 2.5 + 0.5,
+                color: Math.random() < 0.3 ? '#00f0ff' : '#ffffff',
+                alpha: Math.random() * 0.7 + 0.2
+            });
+        }
+
+        /* MANUAL SHOOTING EXECUTION */
+        function fireBullets() {
+            const now = Date.now();
+            if (now - player.lastShotTime < player.fireRate) return;
+            player.lastShotTime = now;
+
+            const spreadStep = 0.14; // Spread angle gap
+            const baseAngle = player.aimAngle;
+            const startAngle = baseAngle - ((player.bulletSpread - 1) * spreadStep) / 2;
+
+            for (let i = 0; i < player.bulletSpread; i++) {
+                const angle = startAngle + i * spreadStep;
+                bullets.push({
+                    x: player.x + Math.cos(angle) * player.radius,
+                    y: player.y + Math.sin(angle) * player.radius,
+                    vx: Math.cos(angle) * player.bulletSpeed,
+                    vy: Math.sin(angle) * player.bulletSpeed,
+                    radius: player.explosiveBullets ? 6 : 4,
+                    damage: player.bulletDamage,
+                    isExplosive: player.explosiveBullets,
+                    color: player.explosiveBullets ? '#ff5500' : '#00f0ff'
+                });
+            }
+
+            soundFX.playShoot();
+        }
+
+        /* SPAWN ENEMIES */
+        function spawnEnemy() {
+            if (!isGameRunning || isPausedForUpgrade) return;
+
+            const types = [
+                { type: 'chaser', radius: 14, speed: 3.0, hp: 40, color: '#ff0055', scoreVal: 20, xpVal: 15 },
+                { type: 'tank', radius: 24, speed: 1.4, hp: 120, color: '#a855f7', scoreVal: 50, xpVal: 35 },
+                { type: 'speedster', radius: 10, speed: 4.2, hp: 25, color: '#eab308', scoreVal: 30, xpVal: 25 }
+            ];
+
+            let config = types[Math.floor(Math.random() * types.length)];
+            
+            // Boss Wave
+            if (currentWave % 5 === 0 && enemies.filter(e => e.type === 'boss').length === 0) {
+                config = { type: 'boss', radius: 42, speed: 1.0, hp: 800 + currentWave * 200, color: '#ef4444', scoreVal: 500, xpVal: 300 };
+            }
+
+            let x, y;
+            if (Math.random() < 0.5) {
+                x = Math.random() < 0.5 ? -30 : viewportWidth + 30;
+                y = Math.random() * viewportHeight;
+            } else {
+                x = Math.random() * viewportWidth;
+                y = Math.random() < 0.5 ? -30 : viewportHeight + 30;
+            }
+
+            enemies.push({ x, y, ...config, maxHp: config.hp });
+        }
+
+        function addXP(amount) {
+            playerXP += amount;
+            if (playerXP >= xpToNextLevel) {
+                playerXP -= xpToNextLevel;
+                playerLevel++;
+                xpToNextLevel = Math.floor(xpToNextLevel * 1.45);
+                triggerUpgradeCards();
+            }
+            updateHUD();
+        }
+
+        function triggerUpgradeCards() {
+            isPausedForUpgrade = true;
+            soundFX.playCardPick();
+
+            const container = document.getElementById('upgradeCardsContainer');
+            container.innerHTML = '';
+
+            // Pick 3 random distinct upgrade cards
+            const shuffled = [...allUpgradeCards].sort(() => 0.5 - Math.random()).slice(0, 3);
+
+            shuffled.forEach(card => {
+                const cardEl = document.createElement('div');
+                cardEl.className = "upgrade-card flex-1 p-4 rounded-2xl flex flex-col items-center justify-between text-center cursor-pointer shadow-xl";
+                cardEl.innerHTML = `
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br ${card.color} flex items-center justify-center text-white text-2xl mb-3 shadow-lg">
+                        <i class="fa-solid ${card.icon}"></i>
+                    </div>
+                    <div>
+                        <div class="font-black text-white text-base mb-1">${card.title}</div>
+                        <div class="text-xs text-gray-300 leading-snug">${card.desc}</div>
+                    </div>
+                    <button class="mt-4 w-full py-2 bg-cyan-500/20 border border-cyan-400/50 rounded-xl text-cyan-300 font-bold text-xs uppercase">Сонгох</button>
+                `;
+                cardEl.onclick = () => {
+                    card.apply();
+                    document.getElementById('upgradeModal').classList.add('hidden');
+                    isPausedForUpgrade = false;
+                    updateHUD();
+                };
+                container.appendChild(cardEl);
+            });
+
+            document.getElementById('upgradeModal').classList.remove('hidden');
+        }
+
+        function createParticles(x, y, color, count = 10) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 1;
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: Math.random() * 3 + 1,
+                    color, alpha: 1
+                });
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('hpBar').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+            document.getElementById('xpBar').style.width = `${Math.min(100, (playerXP / xpToNextLevel) * 100)}%`;
+            document.getElementById('levelVal').innerText = playerLevel;
+            document.getElementById('scoreVal').innerText = score;
+            document.getElementById('gemVal').innerText = gems;
+            document.getElementById('waveVal').innerText = currentWave;
+            document.getElementById('weaponType').innerText = player.explosiveBullets ? 'Тэсрэлттэй Сум' : (player.bulletSpread > 1 ? `Сум х${player.bulletSpread}` : 'Энгийн Буу');
+        }
+
+        function update() {
+            if (!isGameRunning || isPausedForUpgrade) return;
+
+            // Player Movement Input Calculation
+            let moveX = 0;
+            let moveY = 0;
+
+            if (moveVec.active) {
+                moveX = Math.cos(moveVec.angle) * moveVec.speedFactor;
+                moveY = Math.sin(moveVec.angle) * moveVec.speedFactor;
+            } else {
+                if (keys.up) moveY -= 1;
+                if (keys.down) moveY += 1;
+                if (keys.left) moveX -= 1;
+                if (keys.right) moveX += 1;
+                if (moveX !== 0 && moveY !== 0) { moveX *= 0.7071; moveY *= 0.7071; }
+            }
+
+            player.x += moveX * player.speed;
+            player.y += moveY * player.speed;
+
+            // Bound player on canvas
+            player.x = Math.max(player.radius, Math.min(viewportWidth - player.radius, player.x));
+            player.y = Math.max(player.radius, Math.min(viewportHeight - player.radius, player.y));
+
+            // Camera movement effect for dynamic background
+            cameraOffset.x += moveX * player.speed * 0.5;
+            cameraOffset.y += moveY * player.speed * 0.5;
+
+            // Fire Bullets if Aiming (Manual Aiming works continuously)
+            if (player.isAiming || isMouseDown) {
+                fireBullets();
+            }
+
+            // Update Bullets
+            bullets.forEach((b, index) => {
+                b.x += b.vx;
+                b.y += b.vy;
+                if (b.x < 0 || b.x > viewportWidth || b.y < 0 || b.y > viewportHeight) {
+                    bullets.splice(index, 1);
+                }
+            });
+
+            // Enemy Spawner
+            enemySpawnTimer++;
+            if (enemySpawnTimer > Math.max(18, 80 - currentWave * 4)) {
+                spawnEnemy();
+                enemySpawnTimer = 0;
+            }
+
+            // Update Enemies
+            enemies.forEach((enemy, eIndex) => {
+                const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+                enemy.x += Math.cos(angle) * enemy.speed;
+                enemy.y += Math.sin(angle) * enemy.speed;
+
+                // Player collision
+                const distToPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+                if (distToPlayer < player.radius + enemy.radius) {
+                    if (player.hasShield) {
+                        player.hasShield = false;
+                        enemy.x -= Math.cos(angle) * 40;
+                        enemy.y -= Math.sin(angle) * 40;
+                        createParticles(player.x, player.y, '#00f0ff', 15);
+                    } else {
+                        player.hp -= 0.7;
+                        screenShake = 6;
+                        updateHUD();
+                        if (player.hp <= 0) endGame();
+                    }
+                }
+
+                // Bullet collision
+                bullets.forEach((b, bIndex) => {
+                    const distToBullet = Math.hypot(b.x - enemy.x, b.y - enemy.y);
+                    if (distToBullet < enemy.radius + b.radius) {
+                        enemy.hp -= b.damage;
+                        createParticles(b.x, b.y, b.color, 4);
+                        bullets.splice(bIndex, 1);
+
+                        // Explosive area damage
+                        if (b.isExplosive) {
+                            soundFX.playExplosion();
+                            enemies.forEach(other => {
+                                if (Math.hypot(other.x - enemy.x, other.y - enemy.y) < 70) {
+                                    other.hp -= b.damage * 0.6;
+                                }
+                            });
+                            createParticles(enemy.x, enemy.y, '#ff5500', 12);
+                        }
+
+                        if (enemy.hp <= 0) {
+                            soundFX.playExplosion();
+                            createParticles(enemy.x, enemy.y, enemy.color, 16);
+                            gemsList.push({ x: enemy.x, y: enemy.y, radius: 6, value: 5 });
+                            score += enemy.scoreVal;
+                            addXP(enemy.xpVal);
+
+                            if (player.lifesteal > 0) {
+                                player.hp = Math.min(player.maxHp, player.hp + player.lifesteal);
+                            }
+
+                            if (score > currentWave * 300) currentWave++;
+                            enemies.splice(eIndex, 1);
+                            updateHUD();
+                        }
+                    }
+                });
+            });
+
+            // Update Gem Drops
+            gemsList.forEach((gem, gIndex) => {
+                const dist = Math.hypot(player.x - gem.x, player.y - gem.y);
+                if (dist < 100) {
+                    gem.x += (player.x - gem.x) * 0.18;
+                    gem.y += (player.y - gem.y) * 0.18;
+                    if (dist < player.radius + gem.radius) {
+                        gems += gem.value;
+                        gemsList.splice(gIndex, 1);
+                        updateHUD();
+                    }
+                }
+            });
+
+            // Update Particles
+            particles.forEach((p, pIndex) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.04;
+                if (p.alpha <= 0) particles.splice(pIndex, 1);
+            });
+
+            if (screenShake > 0) screenShake *= 0.85;
+        }
+
+        function draw() {
+            ctx.save();
+
+            // Apply Screen Shake
+            if (screenShake > 0.5) {
+                ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+            }
+
+            // Deep background
+            ctx.fillStyle = '#060814';
+            ctx.fillRect(0, 0, viewportWidth, viewportHeight);
+
+            // MOVING DYNAMIC GRID (Visual feedback of movement)
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
+            ctx.lineWidth = 1;
+            const gridSize = 65;
+            const offsetX = (-cameraOffset.x) % gridSize;
+            const offsetY = (-cameraOffset.y) % gridSize;
+
+            ctx.beginPath();
+            for (let x = offsetX; x < viewportWidth; x += gridSize) {
+                ctx.moveTo(x, 0); ctx.lineTo(x, viewportHeight);
+            }
+            for (let y = offsetY; y < viewportHeight; y += gridSize) {
+                ctx.moveTo(0, y); ctx.lineTo(viewportWidth, y);
+            }
+            ctx.stroke();
+
+            // DYNAMIC PARALLAX STARFIELD
+            bgGridStars.forEach(star => {
+                const sx = (star.x - cameraOffset.x * 0.4) % viewportWidth;
+                const sy = (star.y - cameraOffset.y * 0.4) % viewportHeight;
+                const finalX = sx < 0 ? sx + viewportWidth : sx;
+                const finalY = sy < 0 ? sy + viewportHeight : sy;
+
+                ctx.fillStyle = star.color;
+                ctx.globalAlpha = star.alpha;
+                ctx.fillRect(finalX, finalY, star.size, star.size);
+                ctx.globalAlpha = 1;
+            });
+
+            // DRAW GEMS
+            gemsList.forEach(gem => {
+                ctx.beginPath();
+                ctx.arc(gem.x, gem.y, gem.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#10b981';
+                ctx.shadowColor = '#10b981';
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // DRAW BULLETS
+            bullets.forEach(b => {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fillStyle = b.color;
+                ctx.shadowColor = b.color;
+                ctx.shadowBlur = 10;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // DRAW ENEMIES
+            enemies.forEach(e => {
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                ctx.fillStyle = e.color;
+                ctx.shadowColor = e.color;
+                ctx.shadowBlur = 12;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // HP Bar for enemies
+                if (e.hp < e.maxHp) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(e.x - e.radius, e.y - e.radius - 8, e.radius * 2, 4);
+                    ctx.fillStyle = '#ef4444';
+                    ctx.fillRect(e.x - e.radius, e.y - e.radius - 8, (e.hp / e.maxHp) * e.radius * 2, 4);
+                }
+            });
+
+            // DRAW PARTICLES
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, p.alpha);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // DRAW PLAYER & MANUAL AIM LINE
+            if (isGameRunning) {
+                // Manual Aim Direction Laser Line
+                if (player.isAiming || isMouseDown) {
+                    const aimX = player.x + Math.cos(player.aimAngle) * 80;
+                    const aimY = player.y + Math.sin(player.aimAngle) * 80;
+                    ctx.beginPath();
+                    ctx.moveTo(player.x, player.y);
+                    ctx.lineTo(aimX, aimY);
+                    ctx.strokeStyle = 'rgba(255, 0, 85, 0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Aim Crosshair Dot
+                    ctx.beginPath();
+                    ctx.arc(aimX, aimY, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ff0055';
+                    ctx.fill();
+                }
+
+                // Player Shield Visual
+                if (player.hasShield) {
+                    ctx.beginPath();
+                    ctx.arc(player.x, player.y, player.radius + 6, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#00f0ff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // Player Circle Body
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+                ctx.fillStyle = player.color;
+                ctx.shadowColor = player.color;
+                ctx.shadowBlur = 18;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Inner core
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius * 0.4, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            score = 0;
+            gems = 0;
+            playerLevel = 1;
+            playerXP = 0;
+            xpToNextLevel = 60;
+            currentWave = 1;
+            bullets = [];
+            enemies = [];
+            particles = [];
+            gemsList = [];
+
+            player.hp = 100;
+            player.maxHp = 100;
+            player.speed = 4.8;
+            player.fireRate = 180;
+            player.bulletSpread = 1;
+            player.bulletDamage = 30;
+            player.explosiveBullets = false;
+            player.lifesteal = 0;
+            player.hasShield = false;
+            player.x = viewportWidth / 2;
+            player.y = viewportHeight / 2;
+
+            updateHUD();
+        }
+
+        function startGame() {
+            soundFX.init();
+            resetGame();
+            document.getElementById('startModal').classList.add('hidden');
+            document.getElementById('gameOverModal').classList.add('hidden');
+            isGameRunning = true;
+            isPausedForUpgrade = false;
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('finalWave').innerText = currentWave;
+            document.getElementById('gameOverModal').classList.remove('hidden');
+        }
+
+        document.getElementById('btnStartGame').addEventListener('click', startGame);
+        document.getElementById('btnRestart').addEventListener('click', startGame);
+
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html></head>
